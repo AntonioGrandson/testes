@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema do Antônio</title>
+  <style>
+    /* Configurações gerais e textos em branco */
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      background-color: #aaddff;
+      color: white;
+      margin: 0;
+      padding: 0;
+    }
+    h1, p {
+      margin: 10px;
+    }
+    /* Caixinha de pontos (placar) e Instruções */
+    #points-counter {
+      border: 1px solid white;
+      padding: 5px;
+      margin: 10px;
+      font-size: 16px;
+      display: inline-block;
+    }
+    #instructions {
+      margin: 10px;
+    }
+    /* Área de Estatísticas – dois grupos (lado esquerdo e direito) */
+    #stats-wrapper {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    /* Cada área de estatística: grid 4 x 4 (16 células por lado) */
+    .stats-container {
+      width: 465px;
+      height: 310px;
+      background-color: #004080;
+      border: 3px solid white;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+    }
+    .stats-box {
+      border: 1px solid white;
+      text-align: center;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    /* Contêiner que envolve a mesa e o canvas */
+    .table-container {
+      position: relative;
+      width: 930px;
+      height: 620px;
+      margin: 20px auto;
+    }
+    /* Mesa de tênis de mesa */
+    .table-tennis {
+      position: relative;
+      width: 930px;
+      height: 620px;
+      background-color: #004080;
+      border: 5px solid white;
+      overflow: hidden;
+      transition: transform 0.5s ease;
+    }
+    /* Modo isométrico – ângulo 45deg/45deg */
+    .table-tennis.isometric {
+      transform: perspective(1000px) rotateX(45deg) rotateZ(45deg);
+      transform-origin: center center;
+    }
+    /* Grids para a área de pontuação: cada lado tem 4x4 células */
+    #left-grid, #right-grid {
+      position: absolute;
+      top: 0;
+      width: 465px;
+      height: 620px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      z-index: 2;
+    }
+    #left-grid {
+      left: 0;
+    }
+    #right-grid {
+      right: 0;
+    }
+    /* As células dos grids terão borda branca */
+    #left-grid > div, #right-grid > div {
+      border: 1px solid white;
+    }
+    /* Rede vermelha – sempre visível */
+    .net {
+      position: absolute;
+      height: 100%;
+      width: 3px;
+      background-color: red;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+    }
+    /* Linha branca horizontal (modo desenho) */
+    .white-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 2px;
+      background-color: white;
+      display: none;
+      z-index: 2;
+    }
+    /* Marcador de ponto (modo estatística) – cor laranja */
+    .marker {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: orange;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 4;
+      pointer-events: none;
+    }
+    /* Contêiner dos botões (fixo na extrema esquerda, vertical) */
+    #buttons-container {
+      position: fixed;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    /* Botões – estilos */
+    .reset-btn, .switch-mode-btn, .switch-isometric-btn, .analysis-video-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      color: white;
+    }
+    .reset-btn {
+      background-color: #ff3333;
+    }
+    .reset-btn:hover {
+      background-color: #cc0000;
+    }
+    .switch-mode-btn {
+      background-color: #33cc33;
+    }
+    .switch-mode-btn:hover {
+      background-color: #28a428;
+    }
+    .switch-isometric-btn {
+      background-color: #0066cc;
+    }
+    .switch-isometric-btn:hover {
+      background-color: #0055aa;
+    }
+    /* Botão Análise de Vídeo */
+    .analysis-video-btn {
+      background-color: #ff9900;
+    }
+    .analysis-video-btn:hover {
+      background-color: #cc7a00;
+    }
+    /* Canvas para desenho – por padrão cobre a área do contêiner (mesa) */
+    #drawing-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* ===== Seção de Análise de Vídeo (adicionada) ===== */
+    #analysis-video-container {
+      width: 640px;
+      margin: 30px auto;
+      background: #333;
+      padding: 15px;
+      border-radius: 8px;
+      display: none; /* Oculto inicialmente */
+    }
+    #analysis-video-container h2 {
+      margin-bottom: 10px;
+    }
+    #analysis-video-container input[type="file"] {
+      margin-bottom: 10px;
+    }
+    #analysis-video-container video {
+      display: block;
+      margin: 0 auto 15px;
+      background-color: black;
+    }
+    .video-btn {
+      margin: 5px;
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #0066cc;
+      color: white;
+    }
+    .video-btn:hover {
+      background-color: #0055aa;
+    }
+    #markerCount {
+      font-weight: bold;
+      font-size: 18px;
+      color: #ffcc00;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sistema do Antônio</h1>
+  <p id="instructions">Clique nas áreas da mesa para registrar os pontos ou, nos modos desenho, rabisque.</p>
+  <div id="points-counter">Pontos: 0</div>
+  
+  <!-- Área de Estatísticas (modo estatística) -->
+  <div id="stats-wrapper">
+    <div id="stats-left" class="stats-container"></div>
+    <div id="stats-right" class="stats-container"></div>
+  </div>
+  
+  <!-- Contêiner da mesa e do canvas -->
+  <div class="table-container" id="table-container">
+    <canvas id="drawing-canvas"></canvas>
+    <div class="table-tennis" id="table">
+      <div id="left-grid" class="grid"></div>
+      <div id="right-grid" class="grid"></div>
+      <div class="net"></div>
+      <div class="white-line" id="white-line"></div>
+    </div>
+  </div>
+  
+  <!-- Contêiner dos botões (fixos na extrema esquerda, vertical) -->
+  <div id="buttons-container">
+    <button class="reset-btn" id="reset">Resetar Pontos</button>
+    <button class="switch-mode-btn" id="switch-mode">Modo Desenho</button>
+    <button class="switch-isometric-btn" id="switch-isometric-mode">Modo Desenho Isométrico</button>
+    <button class="reset-btn" id="clear-drawing" style="display:none;">Apagar Rabiscos</button>
+    <!-- Botão para exibir/ocultar a análise de vídeo (agora sempre habilitado) -->
+    <button class="analysis-video-btn" id="analysis-btn">Análise de Vídeo</button>
+  </div>
+
+  <!-- ===== Seção de Análise de Vídeo ===== -->
+  <div id="analysis-video-container">
+    <h2>Marcador de Vídeo</h2>
+    <input type="file" id="fileInput" accept="video/*" /><br />
+    <video id="videoPlayer" width="600" controls></video>
+    <div>
+      <button class="video-btn" id="playPauseBtn">Play/Pause</button>
+      <button class="video-btn" id="backwardBtn">Voltar 5s</button>
+      <button class="video-btn" id="forwardBtn">Avançar 5s</button>
+    </div>
+    <div style="margin-top: 10px;">
+      <button class="video-btn" id="markerBtn">Marcar +1</button>
+      <button class="video-btn" id="resetMarkerBtn">Zerar Marcador</button>
+      <p>Marcador: <span id="markerCount">0</span></p>
+    </div>
+  </div>
+
+  <script>
+    /*  ======= LÓGICA ORIGINAL DA LOUSA ======= */
+
+    const tableContainer = document.getElementById("table-container");
+    const table = document.getElementById("table");
+    const leftGrid = document.getElementById("left-grid");
+    const rightGrid = document.getElementById("right-grid");
+    const statsLeft = document.getElementById("stats-left");
+    const statsRight = document.getElementById("stats-right");
+    const statsWrapper = document.getElementById("stats-wrapper");
+    const pointsCounter = document.getElementById("points-counter");
+    const instructions = document.getElementById("instructions");
+    const resetButton = document.getElementById("reset");
+    const switchModeButton = document.getElementById("switch-mode");
+    const switchIsometricButton = document.getElementById("switch-isometric-mode");
+    const clearDrawingButton = document.getElementById("clear-drawing");
+    const whiteLine = document.getElementById("white-line");
+    const canvas = document.getElementById("drawing-canvas");
+    const ctx = canvas.getContext("2d");
+
+    let drawingMode = false;
+    let isometricMode = false;
+    let isDrawing = false;
+
+    // Em modo pontuação, o canvas não captura cliques
+    canvas.style.pointerEvents = "none";
+
+    // Configuração do grid: 32 regiões
+    const totalRegions = 32;
+    const regionCounts = Array(totalRegions).fill(0);
+    let totalHits = 0;
+
+    canvas.width = tableContainer.clientWidth;
+    canvas.height = tableContainer.clientHeight;
+
+    function generateGrids() {
+      for (let i = 0; i < 16; i++) {
+        const cell = document.createElement("div");
+        cell.dataset.index = i;
+        leftGrid.appendChild(cell);
+      }
+      for (let i = 16; i < 32; i++) {
+        const cell = document.createElement("div");
+        cell.dataset.index = i;
+        rightGrid.appendChild(cell);
+      }
+    }
+    generateGrids();
+
+    function generateStats() {
+      for (let i = 0; i < 16; i++) {
+        const cell = document.createElement("div");
+        cell.className = "stats-box";
+        cell.id = "stats-" + i;
+        cell.textContent = "0%";
+        statsLeft.appendChild(cell);
+      }
+      for (let i = 16; i < 32; i++) {
+        const cell = document.createElement("div");
+        cell.className = "stats-box";
+        cell.id = "stats-" + i;
+        cell.textContent = "0%";
+        statsRight.appendChild(cell);
+      }
+    }
+    generateStats();
+
+    function updateStats() {
+      for (let i = 0; i < totalRegions; i++) {
+        const percentage = totalHits > 0 ? ((regionCounts[i] / totalHits) * 100).toFixed(2) : 0;
+        const cell = document.getElementById("stats-" + i);
+        if (cell) {
+          cell.textContent = percentage + "%";
+        }
+      }
+      pointsCounter.textContent = "Pontos: " + totalHits;
+    }
+
+    // Registro de pontos (modo pontuação)
+    tableContainer.addEventListener("click", (event) => {
+      if (!drawingMode && !isometricMode) {
+        const containerRect = tableContainer.getBoundingClientRect();
+        const clickX = event.clientX - containerRect.left;
+        const clickY = event.clientY - containerRect.top;
+        let regionIndex;
+        if (clickX < 465) {
+          const cellWidth = 465 / 4;
+          const cellHeight = 620 / 4;
+          const col = Math.floor(clickX / cellWidth);
+          const row = Math.floor(clickY / cellHeight);
+          if (row < 0 || row >= 4 || col < 0 || col >= 4) return;
+          regionIndex = row * 4 + col;
+        } else if (clickX >= 465 && clickX <= 930) {
+          const cellWidth = 465 / 4;
+          const cellHeight = 620 / 4;
+          const relX = clickX - 465;
+          const col = Math.floor(relX / cellWidth);
+          const row = Math.floor(clickY / cellHeight);
+          if (row < 0 || row >= 4 || col < 0 || col >= 4) return;
+          regionIndex = 16 + row * 4 + col;
+        } else {
+          return;
+        }
+        regionCounts[regionIndex]++;
+        totalHits++;
+
+        const marker = document.createElement("div");
+        marker.classList.add("marker");
+        marker.style.left = `${clickX}px`;
+        marker.style.top = `${clickY}px`;
+        tableContainer.appendChild(marker);
+
+        updateStats();
+      }
+    });
+
+    resetButton.addEventListener("click", () => {
+      totalHits = 0;
+      regionCounts.fill(0);
+      document.querySelectorAll(".marker").forEach(marker => marker.remove());
+      updateStats();
+    });
+
+    switchModeButton.addEventListener("click", () => {
+      if (isometricMode) {
+        isometricMode = false;
+        table.classList.remove("isometric");
+        pointsCounter.style.display = "inline-block";
+        statsWrapper.style.display = "flex";
+        instructions.style.display = "block";
+        leftGrid.style.display = "grid";
+        rightGrid.style.display = "grid";
+        whiteLine.style.display = "none";
+      }
+      drawingMode = !drawingMode;
+      if (drawingMode) {
+        pointsCounter.style.display = "none";
+        statsWrapper.style.display = "none";
+        instructions.style.display = "none";
+
+        canvas.style.pointerEvents = "auto";
+        leftGrid.style.display = "none";
+        rightGrid.style.display = "none";
+        whiteLine.style.display = "block";
+
+        canvas.style.position = "fixed";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100vw";
+        canvas.style.height = "100vh";
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        switchModeButton.textContent = "Modo Pontuação";
+        clearDrawingButton.style.display = "inline-block";
+      } else {
+        pointsCounter.style.display = "inline-block";
+        statsWrapper.style.display = "flex";
+        instructions.style.display = "block";
+
+        canvas.style.pointerEvents = "none";
+        leftGrid.style.display = "grid";
+        rightGrid.style.display = "grid";
+        whiteLine.style.display = "none";
+
+        canvas.style.position = "absolute";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.width = tableContainer.clientWidth;
+        canvas.height = tableContainer.clientHeight;
+
+        switchModeButton.textContent = "Modo Desenho";
+        clearDrawingButton.style.display = "none";
+      }
+    });
+
+    switchIsometricButton.addEventListener("click", () => {
+      if (drawingMode) {
+        drawingMode = false;
+        switchModeButton.textContent = "Modo Desenho";
+        canvas.style.pointerEvents = "none";
+        leftGrid.style.display = "grid";
+        rightGrid.style.display = "grid";
+        whiteLine.style.display = "none";
+        canvas.style.position = "absolute";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.width = tableContainer.clientWidth;
+        canvas.height = tableContainer.clientHeight;
+      }
+      isometricMode = !isometricMode;
+      if (isometricMode) {
+        pointsCounter.style.display = "none";
+        statsWrapper.style.display = "none";
+        instructions.style.display = "none";
+
+        canvas.style.pointerEvents = "auto";
+        leftGrid.style.display = "none";
+        rightGrid.style.display = "none";
+        whiteLine.style.display = "block";
+
+        table.classList.add("isometric");
+
+        canvas.style.position = "fixed";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100vw";
+        canvas.style.height = "100vh";
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        switchIsometricButton.textContent = "Modo Pontuação";
+        clearDrawingButton.style.display = "inline-block";
+      } else {
+        pointsCounter.style.display = "inline-block";
+        statsWrapper.style.display = "flex";
+        instructions.style.display = "block";
+
+        canvas.style.pointerEvents = "none";
+        leftGrid.style.display = "grid";
+        rightGrid.style.display = "grid";
+        whiteLine.style.display = "none";
+
+        table.classList.remove("isometric");
+
+        canvas.style.position = "absolute";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.width = tableContainer.clientWidth;
+        canvas.height = tableContainer.clientHeight;
+
+        switchIsometricButton.textContent = "Modo Desenho Isométrico";
+        clearDrawingButton.style.display = "none";
+      }
+    });
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (drawingMode || isometricMode) {
+        isDrawing = true;
+        ctx.beginPath();
+        const rect = canvas.getBoundingClientRect();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      }
+    });
+    canvas.addEventListener("mousemove", (e) => {
+      if ((drawingMode || isometricMode) && isDrawing) {
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.strokeStyle = "orange";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    });
+    canvas.addEventListener("mouseup", () => {
+      if (drawingMode || isometricMode) isDrawing = false;
+    });
+    canvas.addEventListener("mouseleave", () => {
+      if (drawingMode || isometricMode) isDrawing = false;
+    });
+    clearDrawingButton.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    window.addEventListener("resize", () => {
+      if (drawingMode || isometricMode) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    });
+
+    /* ====== LÓGICA DA ANÁLISE DE VÍDEO ====== */
+    const analysisBtn = document.getElementById("analysis-btn");
+    const analysisVideoContainer = document.getElementById("analysis-video-container");
+
+    // Exibir/ocultar container de vídeo SEM desabilitar o botão
+    analysisBtn.addEventListener("click", () => {
+      if (analysisVideoContainer.style.display === "none") {
+        analysisVideoContainer.style.display = "block";
+      } else {
+        analysisVideoContainer.style.display = "none";
+      }
+    });
+
+    // Agora a lógica do player e marcador
+    const fileInput = document.getElementById("fileInput");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const backwardBtn = document.getElementById("backwardBtn");
+    const forwardBtn = document.getElementById("forwardBtn");
+    const markerBtn = document.getElementById("markerBtn");
+    const resetMarkerBtn = document.getElementById("resetMarkerBtn");
+    const markerCountSpan = document.getElementById("markerCount");
+
+    let markerCount = 0;
+
+    // Carregar vídeo do PC
+    fileInput.addEventListener("change", function() {
+      const file = fileInput.files[0];
+      if (file) {
+        const fileURL = URL.createObjectURL(file);
+        videoPlayer.src = fileURL;
+        videoPlayer.load();
+      }
+    });
+
+    playPauseBtn.addEventListener("click", function() {
+      if (videoPlayer.paused) {
+        videoPlayer.play();
+      } else {
+        videoPlayer.pause();
+      }
+    });
+    backwardBtn.addEventListener("click", function() {
+      videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+    });
+    forwardBtn.addEventListener("click", function() {
+      videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 5);
+    });
+    markerBtn.addEventListener("click", function() {
+      markerCount++;
+      markerCountSpan.textContent = markerCount;
+    });
+    resetMarkerBtn.addEventListener("click", function() {
+      markerCount = 0;
+      markerCountSpan.textContent = markerCount;
+    });
+  </script>
+</body>
+</html>
